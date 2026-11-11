@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 — 2026-11-11
+
+- **发布链路改为 OIDC。** npm 侧启用了 Trusted Publishing（GitHub Actions +
+  `publish.yml`），此后打 `v*` tag 即由 workflow 发布，不再需要 OTP 或长期 token。
+  本次发布即为该链路的验证。
+
 ## 0.1.2 — 2026-11-11
 
 - **Install failures are diagnosable.** The vendored relay loads lazily, so a
