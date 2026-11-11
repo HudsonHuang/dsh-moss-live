@@ -7,6 +7,17 @@ answers out loud, and anything that needs real work is delegated to the DSH agen
 which figures out *how* to do it (immediately, in the background, or as a scheduled
 task) and runs it in a subagent.
 
+## Which one do you need?
+
+- **Live conversation — speak, interrupt, get an answer out loud** → this plugin.
+- **Already-recorded audio/video — precise timestamps, beat-synced cuts, event
+  boundaries, word-level timing** → [agent-ear](https://github.com/HudsonHuang/agent-ear),
+  an offline audio/video skill.
+
+The difference is what you get: real-time gives you something that can answer back;
+offline gives you something that cuts precisely. They are complementary — this
+plugin does not transcribe files, and agent-ear does not run a live call.
+
 ![Call panel](docs/panel.png)
 
 ```

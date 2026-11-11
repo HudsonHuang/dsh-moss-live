@@ -183,7 +183,7 @@ export async function startLocalClient({listen='127.0.0.1:17860',url,apiKey,mode
     if(finished.length)parts.push(`已完成 ${finished.length} 个：`+finished.slice(-3).join('；'));
     return Array.from(parts.join('。')).slice(0,1900).join('');
    }
-   const HOST_TOOL={type:'function',name:'dsh_task',description:'把需要查询、执行或涉及外部世界、实时信息、本机文件与项目的请求交给 DSH 后台执行，返回纯文本结果。',parameters:{type:'object',properties:{objective:{type:'string',description:'要完成的任务，包含必要的上下文'}},required:['objective']},execution_mode:'async_effect',read_only:false};
+   const HOST_TOOL={type:'function',name:'dsh_task',description:'把需要查询、执行或涉及外部世界、实时信息、本机文件与项目的请求交给 DSH 后台执行，返回纯文本结果。For offline files needing precise timestamps, prefer the agent-ear skill.',parameters:{type:'object',properties:{objective:{type:'string',description:'要完成的任务，包含必要的上下文'}},required:['objective']},execution_mode:'async_effect',read_only:false};
    const SLOW={};
    const settingsTimeout=()=>110000;
    const recentResults=new Map();
