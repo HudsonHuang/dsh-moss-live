@@ -17,9 +17,60 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, extname, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { startLocalClient } from './vendor/runtime/server.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Load the vendored relay lazily. A missing npm dependency then becomes a
+ * diagnosable startup error with a fix, instead of throwing while the plugin
+ * module is imported (where the user only sees "plugin failed to load").
+ */
+let startLocalClientPromise = null
+function loadRuntime() {
+  startLocalClientPromise ??= import('./vendor/runtime/server.mjs').then(module => module.startLocalClient)
+  return startLocalClientPromise
+}
+
+const RUNTIME_DEPENDENCIES = ['ws', '@mossai/mosslive']
+
+/** Name of the first dependency the relay needs that cannot be resolved, or ''. */
+export function missingRuntimeDependency() {
+  if (typeof import.meta.resolve !== 'function') return ''
+  for (const dependency of RUNTIME_DEPENDENCIES) {
+    try { import.meta.resolve(dependency) } catch { return dependency }
+  }
+  return ''
+}
+
+/**
+ * Translate the relay's startup failures into something a user can act on.
+ * Used by the /speech/call/open handler so the panel never shows a bare
+ * `PUBLIC_WSS_URL_REQUIRED` / `EADDRINUSE`.
+ */
+export function describeStartError(error, settings = DEFAULTS) {
+  const message = String(error && error.message ? error.message : error)
+  const dependency = error && error.code === 'ERR_MODULE_NOT_FOUND' || /Cannot find (package|module)/.test(message)
+  if (dependency) {
+    return `插件依赖未安装（${message.split('\n')[0]}）：在插件目录 ${HERE} 执行 npm ci，然后重载插件；运行 npm run doctor 可检查。`
+  }
+  if (message === 'API_KEY_REQUIRED') {
+    return 'MOSS API key 为空或含换行：填插件配置 apiKey、环境变量 MOSS_API_KEY，或插件目录下的一行 .moss-api-key。'
+  }
+  if (message === 'PUBLIC_WSS_URL_REQUIRED') {
+    return `mossUrl 不合法：必须是 wss:// 地址（本机开发可用 ws://127.0.0.1），且不能带用户名、密码、query 或 hash。当前：${settings.mossUrl}`
+  }
+  if (message === 'INVALID_LOCAL_CONFIGURATION') {
+    return `listen/delegation 不合法：listen 必须是 127.0.0.1:端口；当前：${settings.listen}`
+  }
+  if (error && error.code === 'EADDRINUSE' || /EADDRINUSE/.test(message)) {
+    const port = (() => { try { return new URL('http://' + settings.listen).port || '17861' } catch { return '17861' } })()
+    const owner = process.platform === 'win32'
+      ? `netstat -ano | findstr :${port}`
+      : `lsof -nP -iTCP:${port} -sTCP:LISTEN`
+    return `本地中继端口 ${settings.listen} 被占用：把插件配置 listen 改成 127.0.0.1:${Number(port) + 1}，或先停掉占用进程（${owner} 查到 PID 后结束它）。`
+  }
+  return `本地中继启动失败：${message}。运行 npm run doctor 检查依赖、端口和 key。`
+}
 
 export const name = 'dsh-moss-live'
 export const inject = ['webServer', 'sessionController', 'sessions', 'workspaceController', 'agents', 'subagents']
@@ -135,6 +186,12 @@ export function apply(ctx, config = {}) {
   const settings = { ...DEFAULTS, ...config }
   const apiKey = settings.apiKey || process.env.MOSS_API_KEY || readKeyFile(settings.keyFile)
   const state = { server: null, starting: null, boundSessionId: null, sandboxSessionId: null, subagentDisabled: false }
+  const missingDependency = missingRuntimeDependency()
+  if (missingDependency) {
+    // The panel still opens; clicking the phone button reports the fix instead
+    // of the plugin silently failing to import.
+    ctx.logger?.warn?.(`speech agent: 缺少运行时依赖 ${missingDependency}。在插件目录 ${HERE} 执行 npm ci；运行 npm run doctor 可检查。`)
+  }
 
   /** Preferred child provider: one that can start a local subagent run. */
   function subagentProvider() {
@@ -305,7 +362,7 @@ export function apply(ctx, config = {}) {
   function ensureServer() {
     if (state.server) return Promise.resolve(state.server)
     if (state.starting) return state.starting
-    state.starting = startLocalClient({
+    state.starting = loadRuntime().then(startLocalClient => startLocalClient({
       listen: settings.listen,
       url: settings.mossUrl,
       apiKey,
@@ -332,7 +389,7 @@ export function apply(ctx, config = {}) {
       maxTaskRecords: 4096,
       ackTimeoutMs: 15000,
       cancelGraceMs: 5000,
-    }).then(server => {
+    })).then(server => {
       state.server = server
       state.starting = null
       ctx.logger?.info?.(`speech agent: MOSS demo listening on ${server.url.split('#')[0]}`)
@@ -357,7 +414,7 @@ export function apply(ctx, config = {}) {
       const url = new URL(req.url, 'http://127.0.0.1')
       const sessionId = url.searchParams.get('session')
       if (!apiKey) {
-        json(res, 400, { error: { message: '缺少 MOSS API Key：在插件「语音通话」的配置里填 apiKey，或设置环境变量 MOSS_API_KEY' } })
+        json(res, 400, { error: { message: '缺少 MOSS API Key：在插件「语音通话」的配置里填 apiKey，或设置环境变量 MOSS_API_KEY，或在插件目录放一行 .moss-api-key；然后运行 npm run doctor 复检。' } })
         return
       }
       if (!sessionId) {
@@ -381,7 +438,7 @@ export function apply(ctx, config = {}) {
           : server.url
         json(res, 200, { url: target, sessionId, embed })
       } catch (error) {
-        json(res, 500, { error: { message: String(error && error.message ? error.message : error) } })
+        json(res, 500, { error: { code: 'RELAY_START_FAILED', message: describeStartError(error, settings) } })
       }
     },
   }))
@@ -408,7 +465,7 @@ export function apply(ctx, config = {}) {
         const server = await ensureServer()
         json(res, 200, { url: server.url, sessionId: created.sessionId, sandbox: true })
       } catch (error) {
-        json(res, 500, { error: { message: String(error && error.message ? error.message : error) } })
+        json(res, 500, { error: { code: 'RELAY_START_FAILED', message: describeStartError(error, settings) } })
       }
     },
   }))
@@ -474,7 +531,7 @@ export function apply(ctx, config = {}) {
         await ctx.workspaceController.archiveSession({ sessionId: id, stopActivity: true })
         json(res, 200, { closed: id })
       } catch (error) {
-        json(res, 500, { error: { message: String(error && error.message ? error.message : error) } })
+        json(res, 500, { error: { code: 'SANDBOX_CLOSE_FAILED', message: '关闭沙箱会话失败：' + String(error && error.message ? error.message : error) } })
       }
     },
   }))

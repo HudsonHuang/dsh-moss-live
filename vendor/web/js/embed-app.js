@@ -31,6 +31,8 @@ let session = null
 let ticker = 0
 let muted = false
 let live = false
+let ending = false
+let fatal = ''
 
 const bubbles = { user: null, assistant: null }
 const lastBubbleAt = { user: 0, assistant: 0 }
@@ -103,9 +105,12 @@ function send(message) {
 
 async function start() {
   startBtn.disabled = true
+  ending = false
+  fatal = ''
   lastUserEl = null
   lastUserAt = 0
   stopBtn.hidden = true
+  hint.textContent = ''
   setState('connecting', '正在接通…')
   try {
     ctx = new AudioContext({ sampleRate: 48000 })
@@ -128,13 +133,24 @@ async function start() {
         renderTasks()
         return
       }
+      if (message.type === 'relay.error') {
+        fail(message.message || '本地中继报告连接失败：运行 npm run doctor 检查依赖、端口和 key。')
+        return
+      }
       session.text(message)
       handle(message)
     }
-    ws.onclose = () => { if (live) stop('连接已断开') }
-    ws.onerror = () => { if (!live) fail('连接中继失败') }
+    ws.onclose = () => {
+      if (ending || fatal) return
+      if (live) stop('与 MOSS 的连接已断开：检查网络后重新开始通话；可运行 npm run doctor 复检。')
+      else fail('本地中继没有响应：先运行 npm run doctor 检查依赖、端口和 key，再重试。')
+    }
+    ws.onerror = () => {
+      if (ending || fatal) return
+      if (!live) fail('连不上本地中继：先运行 npm run doctor 检查依赖、端口和 key。')
+    }
   } catch (error) {
-    fail(error.message || String(error))
+    fail('无法开始通话：' + (error.message || String(error)) + '。运行 npm run doctor 可复检。')
   }
 }
 
@@ -175,8 +191,19 @@ function handle(message) {
       }] } })
       break
     case 'session.updated':
-      if (d.error) { fail('会话配置失败：' + d.error); return }
-      void openMic().catch(error => fail('麦克风不可用：' + (error.message || error)))
+      if (d.error) {
+        fail('会话配置失败：' + (d.error.message || d.error) + '。检查插件配置 model/mossUrl，或运行 npm run doctor。')
+        return
+      }
+      void openMic().catch(error => {
+        const name = error && error.name ? error.name : 'Error'
+        const text = name === 'NotAllowedError'
+          ? '麦克风被拒绝：在浏览器或系统设置里允许本页使用麦克风，再点开始。'
+          : name === 'NotFoundError'
+            ? '没有找到麦克风：连接一个输入设备后重试。'
+            : '麦克风不可用（' + name + '）：检查系统输入设备和权限后重试。'
+        fail(text)
+      })
       break
     case 'input.speech.started':
       setState('live', '你说')
@@ -203,13 +230,17 @@ function handle(message) {
     case 'response.interrupted':
       if (live) setState('live', '在听')
       break
-    case 'error':
-      hint.textContent = '服务端返回错误：' + (d.error?.code || 'unknown')
+    case 'error': {
+      const code = d.error?.code || 'unknown'
+      const reason = d.error?.message ? '：' + d.error.message : ''
+      hint.textContent = 'MOSS 返回错误 ' + code + reason + '。运行 npm run doctor 复检 key/model/网络。'
       break
+    }
   }
 }
 
 function fail(text) {
+  fatal = text
   hint.textContent = text
   setState('', '连接未完成')
   startBtn.disabled = false
@@ -218,6 +249,7 @@ function fail(text) {
 }
 
 function stop(text) {
+  ending = true
   live = false
   clearInterval(ticker)
   try { ws?.close() } catch {}
@@ -231,7 +263,7 @@ function stop(text) {
   stopBtn.hidden = true
   muteBtn.hidden = true
   setState('', text || '准备就绪')
-  hint.textContent = '说完了直接停，它会接话；你插话它会停。'
+  hint.textContent = text || '说完了直接停，它会接话；你插话它会停。'
 }
 
 startBtn.onclick = () => { tasks.clear(); renderTasks(); void start() }

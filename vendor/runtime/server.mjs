@@ -12,6 +12,31 @@ import {validateRequest,filterEvent} from './public-api.mjs';
 const assets=new Set(['js/client-demo.js','js/product-view.js','js/public-session.js','js/speaker.js','js/playback.js','js/mic.js','js/pcm.js','js/capture-worklet.js','product/index.css','product/voice.css','product/client.css','product/orb-renderer.js','product/mosi-logo.png','product/index.html']);
 const browserActions=new Set(['media.mode','mic_state','video.state','video.stream_focus','playback.chunk.completed','playback.completed','playback.stopped','session.update','conversation.item.create','response.create','ping']);
 const loopback=h=>['localhost','127.0.0.1','[::1]'].includes(h);
+/**
+ * Wrapper change: turn a failed MOSS handshake/connection into a message the
+ * call panel can show and act on. This is what stops the panel from reporting
+ * only "relay connection failed" for both a bad key and an unreachable host.
+ */
+export function describeUpstreamFailure({statusCode=0,errorCode='',closeCode=0,reason='',url=''}={}){
+ const where=(()=>{try{const u=new URL(url);return u.origin+u.pathname}catch{return 'api.mosi.cn'}})();
+ const next='运行 npm run doctor 可复检 key、网络和配置。';
+ if(statusCode===401||statusCode===403)return {code:'MOSS_AUTH_FAILED',message:`MOSS 拒绝了这个 API key（HTTP ${statusCode}）：更新插件配置 apiKey、环境变量 MOSS_API_KEY 或插件目录 .moss-api-key 后重新开始通话。${next}`};
+ if(statusCode===404)return {code:'MOSS_URL_NOT_FOUND',message:`MOSS 握手地址返回 404（${where}）：检查插件配置 mossUrl。${next}`};
+ if(statusCode>=500)return {code:'MOSS_UNAVAILABLE',message:`MOSS 服务端在握手时返回 HTTP ${statusCode}（${where}）：稍后重试，或检查 mossUrl。${next}`};
+ if(statusCode)return {code:`MOSS_HTTP_${statusCode}`,message:`MOSS 握手返回 HTTP ${statusCode}（${where}）：检查 mossUrl 与网络。${next}`};
+ const text=String(reason||'').trim();
+ if(/unauthor|invalid.{0,20}(key|token)|forbidden|bad.?key|401|403/i.test(text))return {code:'MOSS_AUTH_FAILED',message:`MOSS 拒绝了连接（${text}）：更新 apiKey / MOSS_API_KEY 后重试。${next}`};
+ const code=String(errorCode||'');
+ const network=['ECONNREFUSED','ENOTFOUND','EAI_AGAIN','ETIMEDOUT','ECONNRESET','EHOSTUNREACH','ENETUNREACH','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE','ERR_TLS_CERT_ALTNAME_INVALID','ERR_SSL_WRONG_VERSION_NUMBER'];
+ if(network.includes(code))return {code:'MOSS_UNREACHABLE',message:`连不上 MOSS（${where}，${code}）：检查网络/代理、mossUrl 配置，或稍后重试。${next}`};
+ const close=Number(closeCode)||0;
+ if(close===1006||close===1015)return {code:'MOSS_UNREACHABLE',message:`与 MOSS 的连接异常断开（${close}）：检查网络/代理、mossUrl 配置后重试。${next}`};
+ if(close===1008)return {code:'MOSS_AUTH_FAILED',message:`MOSS 以 1008（policy violation）关闭连接：key 或 model 可能没有权限，检查 apiKey 与 model。${next}`};
+ if(close===1011)return {code:'MOSS_UNAVAILABLE',message:`MOSS 服务端报错（1011）：稍后重试。${next}`};
+ if(close===1000||close===1001)return {code:'MOSS_CLOSED',message:`MOSS 关闭了连接（${close}${text?'，'+text:''}）：重新开始通话。${next}`};
+ if(code)return {code:'MOSS_CONNECT_FAILED',message:`与 MOSS 的连接失败（${code}${text?'：'+text:''}）：检查网络/代理和 mossUrl。${next}`};
+ return {code:'MOSS_CONNECT_FAILED',message:`与 MOSS 的连接失败${text?'（'+text+'）':''}：检查网络/代理和 mossUrl。${next}`};
+}
 function shortTitle(text){
  let t=String(text||'').replace(/\s+/g,' ').trim();
  t=t.replace(/^用户原话[:：]?\s*/,'').replace(/^用户(说|问)[:：]?\s*/,'');
@@ -95,7 +120,16 @@ export async function startLocalClient({listen='127.0.0.1:17860',url,apiKey,mode
    let bridge,done,attached=false,ended=false;
    const complete=new Promise(r=>done=r);
    const record={complete,stop,get stopping(){return ended;}};active=record;
-   const attachTimer=setTimeout(stop,15000);
+   const attachTimer=setTimeout(()=>sendFailure({code:'MOSS_ATTACH_TIMEOUT',message:`连上了 MOSS，但 15 秒内没有返回 session_attached：检查插件配置 mossUrl/model（${address.origin+address.pathname}），或 MOSS 服务状态；运行 npm run doctor 复检。`}),15000);
+   let failureSent=false;
+   function sendFailure(failure){
+    if(failureSent||ended)return;failureSent=true;
+    try{
+     if(browser.readyState===WebSocket.OPEN)browser.send(JSON.stringify({type:'relay.error',code:failure.code||'MOSS_CONNECT_FAILED',message:failure.message||'与 MOSS 的连接失败。'}));
+    }catch{}
+    // Give the error frame a chance to reach the page before closing the socket.
+    setTimeout(stop,80);
+   }
    function stop(){
     if(ended)return;ended=true;clearTimeout(attachTimer);
     browser.terminate();upstream.terminate();
@@ -262,6 +296,11 @@ export async function startLocalClient({listen='127.0.0.1:17860',url,apiKey,mode
        if(receipt){receipts.delete(raw.data.client_event_id);taskStatus(receipt.id,receipt.status);}
       }
      }
+     if(raw.action==='error'&&!attached){
+      const err=raw.data?.error||{};
+      sendFailure({code:'MOSS_'+(err.code||'ERROR'),message:`MOSS 在建立会话时返回错误${err.code?' '+err.code:''}${err.message?'：'+err.message:''}。检查插件配置 model/mossUrl 与 key，运行 npm run doctor 复检。`});
+      return;
+     }
      const event=filterEvent(raw);if(!event)return;
      if(event.action==='session_attached'){
       attached=true;clearTimeout(attachTimer);
@@ -275,7 +314,7 @@ export async function startLocalClient({listen='127.0.0.1:17860',url,apiKey,mode
      }
      if(event.action.startsWith('session.delegation.')||event.action.endsWith('.appended'))return;
      if(browser.readyState===WebSocket.OPEN)browser.send(JSON.stringify(event).split(apiKey).join('[redacted]'));
-    }catch(error){dbg('dispatch-error',{message:String(error&&error.message||error)});stop();}
+    }catch(error){dbg('dispatch-error',{message:String(error&&error.message||error)});sendFailure({code:'RELAY_PROTOCOL',message:'本地中继处理 MOSS 消息失败：'+(error&&error.message||error)+'。详情见插件目录 vendor/.relay-debug.jsonl。'});}
    });
    browser.on('message',(bytes,binary)=>{
     try{
@@ -289,12 +328,25 @@ export async function startLocalClient({listen='127.0.0.1:17860',url,apiKey,mode
       upstream.send(JSON.stringify(event));
      }
      else upstream.send(bytes,{binary:true});
-    }catch(error){dbg('browser-input-error',{message:String(error&&error.message||error)});stop();}
+    }catch(error){dbg('browser-input-error',{message:String(error&&error.message||error)});sendFailure({code:'RELAY_PROTOCOL',message:'本地中继处理页面消息失败：'+(error&&error.message||error)+'。详情见插件目录 vendor/.relay-debug.jsonl。'});}
    });
-   upstream.on('close',(code,reason)=>{dbg('upstream-close',{code,reason:reason?.toString?.()??String(reason)});});
-   upstream.on('error',error=>{dbg('upstream-error',{message:String(error&&error.message||error)});});
-   browser.on('close',(code,reason)=>{dbg('browser-close',{code,reason:reason?.toString?.()??String(reason)});});
-   for(const ws of [browser,upstream]){ws.on('close',stop);ws.on('error',stop);}
+   upstream.on('unexpected-response',(request,response)=>{
+    dbg('upstream-http',{statusCode:response.statusCode,where:address.origin+address.pathname});
+    try{response.resume?.()}catch{}
+    sendFailure(describeUpstreamFailure({statusCode:response.statusCode,url:address.href}));
+   });
+   upstream.on('close',(code,reason)=>{
+    const text=reason?.toString?.()??String(reason??'');
+    dbg('upstream-close',{code,reason:text});
+    if(attached)sendFailure({code:'MOSS_CLOSED',message:`与 MOSS 的连接中断（${code}${text?'，'+text:''}）：检查网络后重新开始通话；运行 npm run doctor 可复检。`});
+    else sendFailure(describeUpstreamFailure({closeCode:code,reason:text,url:address.href}));
+   });
+   upstream.on('error',error=>{
+    dbg('upstream-error',{message:String(error&&error.message||error),code:error?.code});
+    sendFailure(describeUpstreamFailure({errorCode:error?.code,reason:error?.message,url:address.href}));
+   });
+   browser.on('close',(code,reason)=>{dbg('browser-close',{code,reason:reason?.toString?.()??String(reason)});stop();});
+   browser.on('error',stop);
   });
  });
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(Number(bind.port||80),bind.hostname.replace(/[\[\]]/g,''),resolve);});

@@ -46,8 +46,10 @@ delivered later as commentary.
 
 ## Install
 
-Requirements: DeepSeek Harness with a MOSS API key (`platform.mosi.cn`, model
-`moss-live-1.0`), Node.js ≥ 22.19.
+Requirements: DeepSeek Harness with a MOSS API key (from the MOSS console at
+`platform.mosi.cn`, model `moss-live-1.0`), Node.js ≥ 22.19.
+
+### From npm
 
 The package is on npm as **`dsh-moss-live`**:
 
@@ -55,32 +57,71 @@ The package is on npm as **`dsh-moss-live`**:
 npm install dsh-moss-live
 ```
 
-Either way you obtain the directory — `npm install` above, or:
-
-```bash
-git clone https://github.com/HudsonHuang/dsh-moss-live.git
-```
-
-— install it as a bundle in your DSH profile, using the absolute path:
+Then install it as a bundle in your DSH profile, using the absolute path:
 
 ```text
-plugin_manager action=install_bundle target=/absolute/path/to/dsh-moss-live
+plugin_manager action=install_bundle target=/absolute/path/to/node_modules/dsh-moss-live
 ```
 
-Or install the DSH plugin market and install from there:
+### From the plugin market
 
 ```bash
 dsh plugin --profile web add dshmarket
 ```
 
-Then reload the plugin row if needed, refresh the DSH page, and click the phone button
-next to the composer.
+Then install `dsh-moss-live` from the market.
+
+### From a git clone
+
+```bash
+git clone https://github.com/HudsonHuang/dsh-moss-live.git
+cd dsh-moss-live
+npm ci            # required — see the note below
+```
+
+Then register that directory as a bundle:
+
+```text
+plugin_manager action=install_bundle target=/absolute/path/to/dsh-moss-live
+```
+
+`install_bundle` **links** a local directory into the profile (`pnpm link:`); it
+does not install that directory's dependencies. The plugin's runtime imports
+`ws` and `@mossai/mosslive` at load, so a clone without `npm ci` is recorded as
+installed and then fails on first use; the panel names the missing package, and
+`npm run doctor` prints the exact command.
+
+Finally reload the plugin row if needed, refresh the DSH page, and click the phone
+button next to the composer.
 
 Put your MOSS key in one of these places:
 
 1. `.moss-api-key` in the plugin directory (one line, mode 600), or
 2. the `apiKey` field of the plugin config, or
 3. the `MOSS_API_KEY` environment variable.
+
+## Verify before the first call
+
+Run it from the plugin directory (the clone, or `node_modules/dsh-moss-live` after
+`npm install`):
+
+```bash
+npm run doctor
+```
+
+It checks the Node version, required files, `ws`/`@mossai/mosslive` resolution,
+the vendored relay's module load, the relay port (default `127.0.0.1:17861`), the
+key, and — unless `--offline` — one real MOSS WebSocket handshake plus
+`attach_session` (an empty session, no audio).
+
+It exits non-zero on failure and prints the fix. A pass covers only the checks
+printed as `[ok]`: it does **not** test audio, microphone permission, DSH
+delegation, the desktop shell's iframe microphone injection, or billing/quotas.
+Those are printed as not covered, and `--offline` explicitly says the key and
+reachability were not verified. There is no blanket "all checks passed" line.
+
+If the key exists only in the plugin's `apiKey` config, the CLI cannot read it;
+pass `--key-file <path>` or set `MOSS_API_KEY` for the handshake check.
 
 ## Configuration
 
@@ -99,8 +140,21 @@ Every call writes `calls/YYYYMMDD-HHMMSS.md` (transcript, dispatched tasks, resu
 and leaves a single line with that path in the conversation. An append-only
 `.calls/YYYY-MM-DD.jsonl` keeps the raw stream. Both stay local.
 
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `ERR_MODULE_NOT_FOUND: Cannot find package 'ws'` | You installed from a clone without `npm ci`. Run it in the plugin directory and reload the plugin. `npm run doctor` reports this as well. |
+| Panel says MOSS rejected the key (HTTP 401/403) | Set the key in plugin config `apiKey`, `MOSS_API_KEY`, or `.moss-api-key` (one line), then start the call again. |
+| Panel says it cannot reach MOSS | Check network/proxy and `mossUrl` (default `wss://api.mosi.cn/v1/realtime`); run `npm run doctor`. |
+| `EADDRINUSE` / port 17861 is busy | Change the plugin's `listen` to `127.0.0.1:17862`; or find the owner with `lsof -nP -iTCP:17861 -sTCP:LISTEN` (macOS/Linux) or `netstat -ano | findstr :17861` (Windows) and stop it. |
+| `PUBLIC_WSS_URL_REQUIRED` | `mossUrl` must be `wss://` (loopback `ws://` only for development), with no credentials, query or hash. |
+| `API_KEY_REQUIRED` | The key is empty or contains a newline; write exactly one line. |
+
 ## Known limits
 
+- **Doctor is not a call test.** It checks everything up to `attach_session`; it does
+  not send audio or exercise the microphone, DSH delegation or billing.
 - **One call at a time** — the demo relay is single-session by design.
 - **Microphone permission lives in the parent page.** The desktop shell's
   `dsh-app://` origin is not a secure context, so the harness page captures audio and
@@ -119,18 +173,20 @@ index.js              Host half: relay lifecycle, session policy, delegation →
 client.js             Client half: the phone button and the in-app panel
 vendor/runtime/       MOSS browser demo relay (MIT), with the wrapper changes below
 vendor/web/           MOSS demo front end + a purpose-built compact call page
-test/                 Delegation / barge-in end-to-end scripts
+test/                 Error-message tests + delegation / barge-in end-to-end scripts
 ```
 
 Wrapper changes inside `vendor/` (everything else is upstream):
 
 1. `runtime/server.mjs` — session policy + tools injected after `session_attached`,
    `dsh_task`/`dsh_tasks` handling, delegation to `run()`, per-call log, pinned token,
-   harness origin allowed.
+   harness origin allowed; failed MOSS handshakes are classified (auth vs network)
+   and sent to the page as `relay.error` before the socket is closed.
 2. `web/js/mic.js` — prefer a stream injected by the parent page.
 3. `web/js/client-demo.js` — keep the query string, report real errors, relay override.
 4. `web/product/embed.html`, `web/js/embed-app.js`, `web/product/embed.css` — the
-   compact panel UI (new, not upstream).
+   compact panel UI (new, not upstream); `embed-app.js` shows the relay's actionable
+   error and the microphone guidance instead of a generic disconnect message.
 
 ## Credits
 
