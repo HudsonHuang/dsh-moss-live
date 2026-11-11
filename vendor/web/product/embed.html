@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>语音通话</title>
+  <link rel="stylesheet" href="/speech/app/product/embed.css" />
+</head>
+<body>
+  <div class="call">
+    <div class="row status">
+      <span class="dot" id="dot"></span>
+      <span class="label" id="label">准备就绪</span>
+      <span class="spacer"></span>
+      <button class="ghost" id="mute" hidden title="静音">静音</button>
+    </div>
+
+    <div class="log" id="log">
+      <p class="empty" id="empty">点下面的「开始对话」，然后直接说话。</p>
+    </div>
+
+    <div class="tasks" id="tasks" hidden></div>
+
+    <div class="row controls">
+      <button class="primary" id="start">开始对话</button>
+      <button class="danger" id="stop" hidden>结束</button>
+    </div>
+    <p class="hint" id="hint">说完了直接停，它会接话；你插话它会停。</p>
+  </div>
+  <script type="module" src="/speech/app/js/embed-app.js"></script>
+</body>
+</html>

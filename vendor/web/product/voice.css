@@ -1,0 +1,397 @@
+/* MOSS Live: a quiet, responsive voice surface.
+ * This layer shares the existing planet skins, media preview and workbench
+ * implementation. It changes their presentation, never their transport. */
+:root {
+    --ink-1: #202722;
+    --ink-2: #68716c;
+    --ink-3: #89918c;
+    --accent: #36735b;
+    --accent-2: #36735b;
+    --glass: #f2f4f1;
+    --glass-strong: #fff;
+    --glass-border: #e6eae5;
+    --card: #fff;
+    --shadow-soft: 0 16px 60px #172c2110;
+    --shadow-card: 0 4px 20px #172c2108;
+    --shadow-dock: none;
+    --orb-size: 264px;
+}
+body.voice-ui {
+    background: #fafbf9;
+    color: var(--ink-1);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+.voice-ui [hidden] { display: none !important; }
+.voice-ui button { -webkit-tap-highlight-color: transparent; }
+.voice-ui :focus-visible { outline: 2px solid #36735b; outline-offset: 5px; }
+.voice-ui button:disabled { cursor: default; }
+
+/* A wordmark and two utilities, without a card around the header. */
+.voice-ui .topbar {
+    height: 88px;
+    padding: 0 40px;
+    inset: env(safe-area-inset-top, 0px) 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 20;
+}
+.voice-ui .brand {
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    gap: 10px;
+}
+.brand-mark { width: 25px; height: 25px; color: #39775b; }
+.voice-ui .brand-name { font-size: 19px; font-weight: 650; letter-spacing: -.045em; }
+.brand-live { margin-left: 7px; font-weight: 450; color: #7a837d; letter-spacing: -.025em; }
+.connection-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.voice-ui .conn-state { color: #7b847e; font-size: 12px; letter-spacing: .025em; }
+.voice-ui .conn-dot { width: 5px; height: 5px; box-shadow: none; background: #b7bfb9; }
+.voice-ui .conn-dot.is-live { background: #5a9b70; box-shadow: 0 0 0 3px #5a9b700c; }
+.voice-ui .conn-dot.is-reconnecting { background: #b98a47; }
+.voice-ui .topbar-actions { gap: 9px; }
+.voice-ui .icon-btn {
+    width: 42px;
+    height: 42px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: #606962;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.voice-ui .icon-btn:hover, .voice-ui .icon-btn.is-open { background: #edf0eb; color: #202722; transform: none; }
+.voice-ui .icon-btn svg { width: 21px; height: 21px; }
+
+/* The orb stays in place when transcripts appear. */
+.voice-ui .stage {
+    display: block;
+    height: 100vh;
+    height: 100dvh;
+    padding: 0;
+    min-width: 0;
+    isolation: isolate;
+}
+.voice-ui .orb-zone {
+    position: absolute;
+    top: calc(43% - var(--orb-size) / 2);
+    left: 0;
+    right: 0;
+    width: 100%;
+    padding: 0 24px;
+    gap: 0;
+    align-self: auto;
+}
+.voice-ui .orb:not(.is-docked):not(.is-flying) {
+    width: var(--orb-size);
+    height: var(--orb-size);
+    flex-shrink: 0;
+}
+.voice-ui .orb {
+    pointer-events: auto;
+    cursor: pointer;
+    border-radius: 50%;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+.voice-ui .orb > * { pointer-events: none; }
+.voice-ui .orb:focus-visible { outline-offset: 16px; }
+.voice-ui .orb-ring { display: none; }
+.voice-ui .orb-glow { opacity: .08; }
+.voice-ui .orb-core { box-shadow: 0 10px 36px #2046340a; }
+.voice-ui .orb-status {
+    margin-top: 43px;
+    font-size: 23px;
+    line-height: 1.4;
+    font-weight: 450;
+    letter-spacing: -.035em;
+    color: #343e37;
+}
+.voice-ui[data-call="live"] .orb-status { font-size: 16px; color: #747e77; letter-spacing: .015em; }
+.voice-ui .orb-caption {
+    margin-top: 17px;
+    width: min(530px, 100%);
+    max-width: none;
+    height: 3.2em;
+    flex-shrink: 0;
+    font-size: 20px;
+    line-height: 1.6;
+    font-weight: 400;
+    letter-spacing: -.015em;
+    color: #343e37;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    text-align: center;
+    scrollbar-width: none;
+}
+.voice-ui .orb-caption::-webkit-scrollbar { display: none; }
+
+/* Call controls remain near the thumb, well clear of the caption. */
+.voice-ui .dock-wrap {
+    position: absolute;
+    left: 24px;
+    right: 24px;
+    bottom: calc(39px + env(safe-area-inset-bottom, 0px));
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+.voice-ui .dock {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: nowrap;
+    gap: 18px;
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    max-width: 100%;
+}
+.voice-ui .dock-circle {
+    width: 58px;
+    height: 58px;
+    flex-shrink: 0;
+    background: #ecefea;
+    color: #303b33;
+    box-shadow: none;
+}
+.voice-ui .dock-circle svg { width: 23px; height: 23px; }
+.voice-ui .dock-circle:hover:not(:disabled) { background: #e3e8e1; transform: none; }
+.voice-ui .dock-circle.is-muted { background: #f8e8e5; color: #a64d42; }
+.voice-ui .dock-circle.is-sharing { background: #dbeee0; color: #35744b; box-shadow: none; }
+.voice-ui .dock-end { background: #f0dedb; color: #a34c40; }
+.voice-ui .dock-end:hover:not(:disabled) { background: #ebd2ce; }
+.voice-ui .dock-start {
+    height: 54px;
+    min-width: 152px;
+    padding: 0 32px;
+    background: #252f28;
+    box-shadow: none;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: .02em;
+    color: #fff;
+}
+.voice-ui .dock-start:hover:not(:disabled) { background: #3c4b40; transform: none; box-shadow: none; }
+.voice-ui[data-call="offline"] .dock-circle { display: none; }
+.voice-ui .work-entry:has([hidden]), .voice-ui[data-call="offline"] .work-entry { display: none; }
+.voice-ui .dock-work {
+    height: 30px;
+    min-width: auto;
+    padding: 0 12px;
+    background: transparent;
+    box-shadow: none;
+    border: none;
+    color: #66786a;
+    font-size: 12px;
+    font-weight: 450;
+}
+.voice-ui .dock-work::after { content: ' ↗'; }
+
+
+/* Deliberately revealed conversation: side panel on desktop, sheet on phones. */
+.voice-ui .transcript-wrap {
+    position: absolute;
+    z-index: 15;
+    top: 108px;
+    right: 30px;
+    bottom: 160px;
+    width: min(340px, 28vw);
+    padding: 0 20px 22px;
+    background: #ffffffed;
+    border: 1px solid #e6eae4;
+    border-radius: 22px;
+    box-shadow: 0 18px 50px #233f2910;
+    mask-image: none;
+    -webkit-mask-image: none;
+    scrollbar-width: thin;
+    scrollbar-color: #d9ded7 transparent;
+    animation: transcript-enter .22s ease-out;
+}
+.transcript-heading {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #fffffffa;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 68px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #eef0ec;
+    color: #768077;
+    font-size: 12px;
+}
+.transcript-empty { margin: 30px 0; font-size: 12px; line-height: 1.8; text-align: center; color: #8b978b; }
+.voice-ui .transcript { gap: 22px; padding: 0; }
+.voice-ui .message { max-width: 100%; font-size: 14px; line-height: 1.8; box-shadow: none; animation: none; }
+.voice-ui .message-user { background: #f0f3ed; color: #4b584e; border: 0; padding: 10px 14px; border-radius: 15px; align-self: flex-end; }
+.voice-ui .message-assistant { padding: 0; color: #303b32; border: 0; background: transparent; align-self: stretch; }
+.voice-ui .message-info { font-size: 11px; padding: 5px 0; background: none; color: #8b938b; }
+.voice-ui .message-tool { background: #f8f9f6; border-color: #e8ece4; font-size: 11px; }
+@keyframes transcript-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Settings and history share the same restrained surface. */
+.voice-ui .drawer-scrim { background: #1c2b2024; backdrop-filter: blur(4px); }
+.voice-ui .drawer {
+    background: #fcfdfb;
+    border: 0;
+    width: min(400px, 92vw);
+    padding: 26px 26px max(28px, env(safe-area-inset-bottom));
+    box-shadow: 0 0 70px #2138240d;
+    gap: 18px;
+    backdrop-filter: none;
+}
+.voice-ui .drawer-header { align-items: center; padding: 0 0 12px; }
+.voice-ui .drawer-eyebrow { font-size: 9px; letter-spacing: .14em; font-weight: 500; margin-bottom: 9px; color: #8f988f; }
+.voice-ui .drawer h2 { font-size: 23px; font-weight: 500; letter-spacing: -.025em; }
+.voice-ui .dev-section { border: 0; border-top: 1px solid #e8ece5; padding: 23px 0 4px; margin: 0; border-radius: 0; background: none; }
+.voice-ui .dev-section h3 { font-size: 13px; color: #465249; font-weight: 550; margin: 0 0 18px; }
+.voice-ui .dev-section label { font-size: 13px; color: #727e74; display: flex; justify-content: space-between; }
+.voice-ui .dev-hint { line-height: 1.8; color: #8a948b; font-size: 11px; }
+.voice-ui #btn-upload-file { margin-top: 18px; }
+.voice-ui .btn-primary { background: #28352b; box-shadow: none; border: 0; font-weight: 450; min-height: 44px; border-radius: 12px; }
+.voice-ui .btn-ghost { background: #f0f3ed; border: 0; color: #657465; font-size: 12px; font-weight: 450; min-height: 44px; border-radius: 12px; }
+.voice-ui .btn-ghost:hover { background: #e8eee4; }
+.voice-ui .voice-toggle { justify-content: flex-start; margin: 0 0 20px; gap: 18px; }
+.voice-ui .voice-side { font-size: 13px; color: #8c968c; }
+.voice-ui .voice-side.is-active { color: #3a6745; font-weight: 500; }
+.voice-ui .voice-switch { background: #e9efe5; border: 0; box-shadow: none; width: 48px; height: 28px; }
+.voice-ui .voice-switch.is-right { background: #e9efe5; }
+.voice-ui .voice-knob { top: 4px; left: 4px; width: 20px; height: 20px; background: #5b7e61; box-shadow: none; }
+.voice-ui .voice-switch.is-right .voice-knob { transform: translateX(20px); }
+.voice-ui .persona-bar { padding: 0; justify-content: flex-start; gap: 8px; margin: 0; }
+.voice-ui .persona-chip { min-height: 40px; background: #f0f3ec; color: #7c887c; box-shadow: none; border: 1px solid transparent; font-size: 12px; padding: 8px 20px; }
+.voice-ui .persona-chip.is-selected { background: #edf3e9; border-color: #bacdb5; color: #3e6741; }
+.appearance-settings summary, .diagnostics > summary { cursor: pointer; font-size: 13px; font-weight: 500; color: #465249; min-height: 32px; list-style: none; }
+.appearance-settings summary::after, .diagnostics > summary::after { content: '+'; float: right; font-size: 17px; font-weight: 350; color: #8e998c; }
+.appearance-settings[open] summary::after, .diagnostics[open] > summary::after { content: '−'; }
+.appearance-settings summary::-webkit-details-marker, .diagnostics > summary::-webkit-details-marker { display: none; }
+.appearance-settings summary span { font-size: 11px; color: #98a194; font-weight: 400; margin-left: 12px; }
+.voice-ui .appearance-settings .planet-bar { justify-content: flex-start; flex-wrap: wrap; margin: 10px 0 0; gap: 10px; padding: 0; }
+.voice-ui .appearance-settings .planet-option { width: 44px; height: 44px; margin: 0; opacity: .8; border: 1px solid transparent; transform: none; }
+.voice-ui .appearance-settings .planet-option.is-selected { opacity: 1; border-color: #719770; box-shadow: 0 0 0 3px #72956b12; }
+.voice-ui .appearance-settings .planet-option:not(.is-selected) { width: 44px; margin: 0; opacity: .8; border-width: 1px; pointer-events: auto; }
+.voice-ui .appearance-settings .planet-expand { display: none; }
+.voice-ui .mini-orb[data-planet="moss"] { background: radial-gradient(at 28% 22%, #f4faee, #bddbc2 40%, #5c9a9c 70%, #436e8d); box-shadow: none; }
+.voice-ui .diagnostics { margin-top: 8px; padding-top: 22px; border-top: 1px solid #e8ece5; }
+.voice-ui .session-item { border: 0; background: #f2f5ee; padding: 16px; box-shadow: none; }
+.voice-ui .session-item.active { background: #e7efe0; border: 0; box-shadow: none; }
+.voice-ui .session-title { font-weight: 500; font-size: 13px; color: #4f634e; }
+.voice-ui .session-meta { display: none; }
+.voice-ui .task-trace { font-size: 11px; color: #7e8c7c; }
+.voice-ui .self-view { z-index: 16; right: 32px; bottom: 165px; width: 210px; box-shadow: 0 8px 35px #162b211a; }
+body[data-workbench="work"] .connection-status { opacity: 0; }
+
+
+/* Tablets and phones: sheet navigation, a smaller orb, 48px touch targets. */
+@media (max-width: 1100px) {
+    :root { --orb-size: 230px; }
+    .voice-ui .topbar { height: 76px; padding: 0 24px; }
+    .voice-ui .transcript-wrap { width: min(440px, calc(100% - 32px)); right: max(16px, calc((100% - 440px) / 2)); top: auto; bottom: 148px; height: 32dvh; }
+    .voice-ui .transcript-expanded .orb-caption, .voice-ui .transcript-expanded .orb-status { visibility: hidden; }
+    .voice-ui .self-view { width: 155px; right: 20px; bottom: 158px; }
+}
+@media (max-width: 600px) {
+    :root { --orb-size: min(55vw, 224px); }
+    .voice-ui .topbar { height: 72px; padding: 0 20px; }
+    .voice-ui .brand-name { font-size: 18px; }
+    .brand-mark { width: 22px; height: 22px; }
+    .voice-ui .topbar-actions { gap: 4px; }
+    .voice-ui .icon-btn { width: 44px; height: 44px; }
+    .connection-status { top: 63px; bottom: auto; height: 22px; }
+    .voice-ui .conn-state { font-size: 10px; }
+    .voice-ui .orb-zone { top: calc(40% - var(--orb-size) / 2); padding: 0 30px; }
+    .voice-ui .orb-status { margin-top: 35px; font-size: 21px; }
+    .voice-ui[data-call="live"] .orb-status { font-size: 14px; }
+    .voice-ui .orb-caption { font-size: 18px; margin-top: 17px; line-height: 1.65; height: 3.3em; }
+    .voice-ui .dock-wrap { left: 20px; right: 20px; bottom: calc(32px + env(safe-area-inset-bottom, 0px)); gap: 23px; }
+    .voice-ui .dock { gap: 16px; }
+    .voice-ui .dock-circle { width: 54px; height: 54px; }
+    .voice-ui .dock-start { min-width: 148px; height: 54px; font-size: 14px; }
+
+    .voice-ui .drawer { top: auto; bottom: 0; left: 0; right: 0; width: 100%; max-height: 86vh; max-height: 86dvh; border-radius: 26px 26px 0 0; padding: 28px 26px calc(28px + env(safe-area-inset-bottom, 0px)); transform: translateY(104%); }
+    .voice-ui .drawer.is-open { transform: translateY(0); }
+    .voice-ui .drawer::before { content: ''; position: absolute; top: 10px; left: calc(50% - 16px); width: 32px; height: 3px; border-radius: 3px; background: #d4dccf; }
+    .voice-ui .drawer-header { position: sticky; top: -28px; margin: -3px 0 0; padding: 6px 0 12px; background: #fcfdfb; z-index: 2; }
+    .voice-ui .drawer h2 { font-size: 21px; }
+    .voice-ui .drawer-eyebrow { display: none; }
+    .voice-ui .transcript-wrap { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); height: 32dvh; padding: 0 18px 22px; border-radius: 20px; }
+    .transcript-heading { min-height: 57px; }
+    .voice-ui .message { font-size: 13px; }
+    .voice-ui .task-trace { position: absolute; top: -65px; left: 26px; right: 26px; width: auto; max-width: none; transform: none; }
+    .voice-ui .self-view { top: 108px; bottom: auto; right: 16px; width: 108px; border-radius: 13px; }
+    .voice-ui .self-view-badge { left: 5px; bottom: 5px; padding: 3px 6px; font-size: 9px; }
+}
+@media (max-width: 350px) {
+    .voice-ui .topbar { padding: 0 14px; }
+    .voice-ui .orb-caption { font-size: 16px; }
+    .voice-ui .dock { gap: 12px; }
+    .voice-ui .dock-circle { width: 48px; height: 48px; }
+}
+@media (max-height: 650px) {
+    :root { --orb-size: 164px; }
+    .voice-ui .orb-zone { top: calc(38% - var(--orb-size) / 2); }
+    .voice-ui .orb-status { margin-top: 20px; font-size: 18px; }
+    .voice-ui .orb-caption { margin-top: 10px; font-size: 16px; }
+    .voice-ui .dock-wrap { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); gap: 12px; }
+    .voice-ui .dock-circle { height: 48px; width: 48px; }
+    .voice-ui .dock-start { height: 48px; }
+}
+@media (max-height: 480px) and (min-width: 600px) {
+    :root { --orb-size: 128px; }
+    .voice-ui .topbar { height: 56px; padding: 0 24px; }
+    .voice-ui .orb-zone { width: 55%; top: calc(52% - var(--orb-size) / 2); }
+    .voice-ui .orb-status { margin-top: 16px; font-size: 15px; }
+    .voice-ui .orb-caption { font-size: 14px; margin-top: 8px; }
+    .voice-ui .dock-wrap { left: 54%; right: 20px; bottom: 30%; }
+    .voice-ui .dock { gap: 12px; }
+    .voice-ui .transcript-wrap { bottom: 24px; right: 20px; height: calc(100dvh - 100px); width: 42%; }
+    .voice-ui .self-view { top: 65px; right: 24px; bottom: auto; width: 100px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .voice-ui *, .voice-ui *::before, .voice-ui *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* Four quiet cloud palettes, with a static fallback when WebGL is unavailable. */
+.mosi-logo { display: block; width: 145px; height: auto; }
+.voice-ui .orb-core { animation: none; transform: none; transition: none; box-shadow: none; border-radius: 50%; }
+/* The canvas overhangs the orb by 25% per side so the deformed outline is
+ * never clipped (orb-renderer.js FRAME=1.50). */
+.orb-canvas { position: absolute; inset: -25%; display: block; width: 150%; height: 150%; opacity: 0; }
+.has-orb-renderer .orb-canvas { opacity: 1; }
+.voice-ui .orb-core.has-orb-renderer { background: transparent; overflow: visible; border-radius: 0; }
+.orb-aura { display: none; }
+.orb[data-planet="moss"] .orb-core:not(.has-orb-renderer), .skin-preview[data-planet="moss"] { background: linear-gradient(168deg, #84bcb2 15%, #99c5ba 38%, #e6f1e5 62%, #f1f6ee 84%); }
+.orb[data-planet="azure"] .orb-core:not(.has-orb-renderer), .skin-preview[data-planet="azure"] { background: linear-gradient(172deg, #8aaee7 15%, #a0bdea 38%, #e8f0fb 63%, #f0f5fc 84%); }
+.orb[data-planet="ember"] .orb-core:not(.has-orb-renderer), .skin-preview[data-planet="ember"] { background: linear-gradient(162deg, #e5b7a0 15%, #eac7b3 40%, #faf0e6 64%, #fdf6ef 84%); }
+.orb[data-planet="aurora"] .orb-core:not(.has-orb-renderer), .skin-preview[data-planet="aurora"] { background: linear-gradient(174deg, #b5a8df 15%, #c3b9e5 39%, #f0eafa 64%, #f8f4fc 84%); }
+[data-muted="true"] .orb { filter: saturate(.6); }
+.voice-ui .appearance-settings .planet-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.voice-ui .appearance-settings .planet-option.skin-card { display: flex; flex-direction: column; align-items: center; width: 100%; height: auto; min-height: 133px; padding: 16px 8px 12px; margin: 0; border-radius: 15px; border: 1px solid #e4e9e1; background: #f7f9f4; opacity: 1; transform: none; gap: 5px; }
+.voice-ui .appearance-settings .planet-option.skin-card.is-selected { background: #eef5ea; border-color: #8ba984; box-shadow: none; }
+.skin-preview { width: 52px; height: 52px; display: block; border-radius: 50%; margin-bottom: 4px; box-shadow: none; }
+.skin-title { color: #3d5140; font-size: 12px; }
+.skin-description { color: #8b9589; font-size: 10px; }
+.voice-ui .dock-wrap { bottom: calc(58px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 600px) {
+    .mosi-logo { width: 132px; }
+    .voice-ui .dock-wrap { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-height: 650px) { .voice-ui .dock-wrap { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); } }
+@media (max-height: 480px) and (min-width: 600px) { .voice-ui .dock-wrap { bottom: 30%; } }

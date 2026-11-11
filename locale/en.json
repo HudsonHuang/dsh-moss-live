@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Voice call",
+    "description": "Adds a phone button beside the composer that opens the MOSS-Live full-duplex call page for the current session; delegated tasks run in DSH and the spoken result comes back as the agent's answer."
+  }
+}

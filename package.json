@@ -1,0 +1,63 @@
+{
+  "name": "dsh-moss-live",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MOSS-Live full-duplex voice for DeepSeek Harness: a phone button opens an in-app call panel; tasks are delegated to DSH and run in subagents.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "vendor/runtime/*.mjs",
+    "vendor/runtime/*.json",
+    "vendor/web/**",
+    "vendor/LICENSE"
+  ],
+  "dependencies": {
+    "@mossai/mosslive": "0.1.0",
+    "ws": "8.22.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-api-session-controller"
+      ]
+    }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HudsonHuang/dsh-moss-live.git"
+  },
+  "homepage": "https://github.com/HudsonHuang/dsh-moss-live",
+  "bugs": {
+    "url": "https://github.com/HudsonHuang/dsh-moss-live/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "moss-live",
+    "voice",
+    "realtime",
+    "full-duplex",
+    "speech"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

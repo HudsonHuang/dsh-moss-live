@@ -1,0 +1,4 @@
+- insert:
+    - id: speech-agent
+      name: 'dsh-moss-live'
+      config: {}

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <title>MOSS-Live</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <link rel="stylesheet" href="/product/index.css" />
+    <link rel="stylesheet" href="/product/voice.css" />
+    <link rel="stylesheet" href="/product/client.css" />
+    <meta name="theme-color" content="#fafbf9" />
+</head>
+
+<body class="voice-ui" data-call="offline">
+
+    <header class="topbar">
+        <div class="brand" aria-label="MOSI">
+            <img class="mosi-logo" src="/product/mosi-logo.png" alt="MOSI" width="145" height="39" />
+        </div>
+        <div class="connection-status" role="status">
+            <span id="conn-dot" class="conn-dot"></span>
+            <span id="status" class="conn-state">准备就绪</span>
+        </div>
+        <div class="topbar-actions">
+            <button id="btn-new-session" class="icon-btn" type="button" title="新建会话" aria-label="新建会话">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 8v8M8 12h8" />
+                </svg>
+            </button>
+            <button id="btn-history" class="icon-btn" type="button" title="历史会话" aria-label="历史会话">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+            </button>
+            <button id="btn-dev" class="icon-btn" type="button" title="外观设置" aria-label="外观设置">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="4" y1="7" x2="20" y2="7" />
+                    <circle cx="9" cy="7" r="2.2" />
+                    <line x1="4" y1="17" x2="20" y2="17" />
+                    <circle cx="15" cy="17" r="2.2" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <aside id="task-panel" class="task-panel" aria-label="后台任务" hidden>
+        <h2 id="task-summary">后台任务</h2>
+        <ul id="task-list" aria-live="polite" aria-relevant="additions text"></ul>
+    </aside>
+
+    <main class="stage">
+        <section id="transcript-wrap" class="transcript-wrap" aria-label="对话记录" hidden>
+            <div class="transcript-heading">
+                <span>对话记录</span>
+                <button id="btn-close-transcript" class="icon-btn" type="button" aria-label="收起对话记录" title="收起对话记录">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
+                </button>
+            </div>
+            <p id="transcript-empty" class="transcript-empty">对话开始后，文字会出现在这里。</p>
+            <div id="transcript" class="transcript"></div>
+        </section>
+
+        <section class="orb-zone">
+            <div id="orb" class="orb" data-state="disconnected" data-planet="moss" role="button" tabindex="0" aria-label="展开或收起对话记录" aria-controls="transcript-wrap" aria-expanded="false">
+                <div class="orb-aura" aria-hidden="true"></div>
+                <div class="orb-core" aria-hidden="true">
+                    <canvas id="orb-canvas" class="orb-canvas"></canvas>
+                </div>
+            </div>
+            <div id="stream-status" class="orb-status" role="status">今天想聊些什么？</div>
+            <div id="live-caption" class="orb-caption" aria-live="polite" aria-atomic="false"></div>
+        </section>
+
+        <div class="dock-wrap">
+            <div class="dock" role="group" aria-label="通话控制">
+                <button id="btn-mute" class="dock-btn dock-circle" type="button" disabled title="关闭麦克风"
+                    aria-label="关闭麦克风"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
+                <button id="start" class="dock-start" type="button">开始对话</button>
+                <button id="stop" class="dock-btn dock-circle dock-end" type="button" disabled title="结束对话"
+                    aria-label="结束对话">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <div id="drawer-scrim" class="drawer-scrim" hidden></div>
+
+
+    <aside role="dialog" aria-modal="true" inert id="drawer-history" class="drawer drawer-right history-drawer" aria-hidden="true" aria-label="历史会话">
+        <div class="drawer-header"><div><div class="drawer-eyebrow">CONVERSATIONS</div><h2>历史会话</h2></div>
+            <button id="btn-close-history" class="icon-btn" type="button" title="关闭历史会话" aria-label="关闭历史会话"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        </div>
+        <p id="history-notice" class="history-notice" hidden></p>
+        <p id="history-empty" class="history-empty">还没有保存的会话。开始对话后，记录会出现在这里。</p>
+        <div class="history-layout"><nav id="history-list" class="history-list" aria-label="已保存会话"></nav>
+            <section id="history-detail" class="history-detail" hidden><h3 id="history-detail-title"></h3><p id="history-detail-date" class="history-date"></p><div id="history-messages"></div></section>
+        </div>
+    </aside>
+
+    <aside role="dialog" aria-modal="true" inert id="drawer-dev" class="drawer drawer-right" aria-hidden="true" aria-label="外观设置">
+        <div class="drawer-header">
+            <div>
+                <div class="drawer-eyebrow">MOSS LIVE</div>
+                <h2>外观设置</h2>
+            </div>
+            <button id="btn-close-dev" class="icon-btn" type="button" aria-label="关闭设置">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <details class="dev-section appearance-settings">
+            <summary>圆球外观 <span>四种流动风格</span></summary>
+<nav id="planet-bar" class="planet-bar" aria-label="圆球外观"></nav>
+        </details>
+
+    </aside>
+
+    <script type="module" src="/js/client-demo.js"></script>
+</body>
+
+</html>
