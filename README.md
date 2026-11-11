@@ -67,6 +67,12 @@ git clone https://github.com/HudsonHuang/dsh-moss-live.git
 plugin_manager action=install_bundle target=/absolute/path/to/dsh-moss-live
 ```
 
+Or install the DSH plugin market and install from there:
+
+```bash
+dsh plugin --profile web add dshmarket
+```
+
 Then reload the plugin row if needed, refresh the DSH page, and click the phone button
 next to the composer.
 
