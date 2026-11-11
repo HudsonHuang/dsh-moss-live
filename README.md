@@ -46,20 +46,28 @@ delivered later as commentary.
 
 ## Install
 
-Requirements: DeepSeek Harness with a MOSS API key
-(`platform.mosi.cn`, model `moss-live-1.0`), Node.js ≥ 22.19.
+Requirements: DeepSeek Harness with a MOSS API key (`platform.mosi.cn`, model
+`moss-live-1.0`), Node.js ≥ 22.19.
+
+The package is on npm as **`dsh-moss-live`**:
+
+```bash
+npm install dsh-moss-live
+```
+
+Either way you obtain the directory — `npm install` above, or:
 
 ```bash
 git clone https://github.com/HudsonHuang/dsh-moss-live.git
 ```
 
-Then install the bundle into your DSH profile:
+— install it as a bundle in your DSH profile, using the absolute path:
 
 ```text
 plugin_manager action=install_bundle target=/absolute/path/to/dsh-moss-live
 ```
 
-Restart or reload the plugin row, refresh the DSH page, and click the phone button
+Then reload the plugin row if needed, refresh the DSH page, and click the phone button
 next to the composer.
 
 Put your MOSS key in one of these places:
